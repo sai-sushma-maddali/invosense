@@ -1,0 +1,79 @@
+[
+  {
+    "invoice_id": "INV-0042",
+    "vendor": "Axiom Office Supplies Sdn Bhd",
+    "amount_myr": 1500.00,
+    "currency": "MYR",
+    "decision": "PAY",
+    "reasons": [],
+    "tax_rule_url": "https://www.hasil.gov.my/en/tax-info/business-expenses",
+    "line_items": [
+      { "description": "A4 Paper (500-sheet reams × 20)", "qty": 20, "unit_price": 35.00 },
+      { "description": "Ballpoint pens (box)", "qty": 10, "unit_price": 25.00 },
+      { "description": "Printer cartridges", "qty": 5, "unit_price": 170.00 }
+    ]
+  },
+  {
+    "invoice_id": "INV-0077",
+    "vendor": "DataCenter Malaysia Berhad",
+    "amount_myr": 8200.00,
+    "currency": "MYR",
+    "decision": "PAY",
+    "reasons": [],
+    "tax_rule_url": "https://www.hasil.gov.my/en/tax-info/digital-services",
+    "line_items": [
+      { "description": "Colocation rack space (monthly)", "qty": 2, "unit_price": 3500.00 },
+      { "description": "10 Gbps bandwidth burst", "qty": 1, "unit_price": 1200.00 }
+    ]
+  },
+  {
+    "invoice_id": "INV-0031",
+    "vendor": "FastFreight Logistics Sdn Bhd",
+    "amount_myr": 3750.50,
+    "currency": "MYR",
+    "decision": "FLAG",
+    "reasons": [
+      "Duplicate invoice detected — INV-0031 matches INV-0028 (same vendor, amount, date range)",
+      "Previous payment cleared on 2024-05-10; re-submission without credit note"
+    ],
+    "tax_rule_url": "https://www.hasil.gov.my/en/tax-info/input-tax-credit",
+    "line_items": [
+      { "description": "Air freight — KUL→SIN (50 kg)", "qty": 1, "unit_price": 2100.50 },
+      { "description": "Custom clearance handling", "qty": 1, "unit_price": 1650.00 }
+    ]
+  },
+  {
+    "invoice_id": "INV-0055",
+    "vendor": "LegalEdge Consultants Sdn Bhd",
+    "amount_myr": 22500.00,
+    "currency": "MYR",
+    "decision": "HUMAN_REVIEW",
+    "reasons": [
+      "Invoice amount exceeds RM 20,000 auto-approval threshold",
+      "Engagement description is vague — 'professional advisory services Q2' lacks itemised scope",
+      "Vendor not yet on approved-supplier whitelist"
+    ],
+    "tax_rule_url": "https://www.hasil.gov.my/en/tax-info/professional-fees-withholding-tax",
+    "line_items": [
+      { "description": "Professional advisory services Q2 2024", "qty": 1, "unit_price": 22500.00 }
+    ]
+  },
+  {
+    "invoice_id": "INV-0089",
+    "vendor": "GreenTech Solutions Bhd",
+    "amount_myr": 14800.00,
+    "currency": "MYR",
+    "decision": "HUMAN_REVIEW",
+    "reasons": [
+      "Line-item 'R&D Equipment Import' may qualify for Pioneer Status tax exemption — requires manual tax-code verification",
+      "Customs HS code missing from supporting documents",
+      "Amount falls within capital-expenditure threshold requiring CFO sign-off"
+    ],
+    "tax_rule_url": "https://www.mida.gov.my/incentives/pioneer-status",
+    "line_items": [
+      { "description": "R&D Equipment Import — spectrometer unit", "qty": 1, "unit_price": 12000.00 },
+      { "description": "Installation & commissioning", "qty": 1, "unit_price": 1800.00 },
+      { "description": "Calibration service", "qty": 2, "unit_price": 500.00 }
+    ]
+  }
+]

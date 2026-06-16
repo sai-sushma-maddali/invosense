@@ -1,0 +1,60 @@
+# ── Secrets (never commit) ─────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+extraction_code/.env
+extraction_code/.env.*
+!extraction_code/.env.example
+
+# ── Python ───────────────────────────────────────────────────────────────────
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+*.egg
+
+# ── Node / frontend build ────────────────────────────────────────────────────
+node_modules/
+**/node_modules/
+frontend/dist/
+frontend/public/bundle.js
+frontend/public/bundle.js.map
+
+# ── Runtime data (local invoices & pipeline output) ────────────────────────────
+data/inbox/**
+data/extractions/**
+data/compliance/**
+data/attachments/**
+data/watch/**
+!data/**/.gitkeep
+
+# ── Extraction eval output ───────────────────────────────────────────────────
+extraction_code/out/
+extraction_code/.venv/
+
+# ── OS / editor ──────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*.swo
+.idea/
+.vscode/
+*.code-workspace
+
+# ── Logs & temp files ────────────────────────────────────────────────────────
+*.log
+*.tmp
+upload_*
+gmail_*
+*.processing

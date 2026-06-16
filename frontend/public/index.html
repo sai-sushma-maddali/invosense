@@ -1,0 +1,1283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>InvoSense — AI Invoice Pipeline</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root {
+      --bg:      #F0F4FF;
+      --navy:    #1E2B4A;
+      --primary: #4F6CF7;
+      --teal:    #06B6D4;
+      --green:   #10B981;
+      --amber:   #F59E0B;
+      --red:     #EF4444;
+      --heading: #0F172A;
+      --body:    #374151;
+      --muted:   #6B7280;
+      --border:  #E2E8F0;
+      --card:    #FFFFFF;
+    }
+    body { background:var(--bg);color:var(--body);font-family:-apple-system,BlinkMacSystemFont,"Inter","Segoe UI",sans-serif; }
+    .card { background:var(--card);border-radius:1rem;box-shadow:0 1px 3px rgba(0,0,0,.08),0 4px 16px rgba(79,108,247,.07); }
+    .stat-card-indigo { border-left:4px solid var(--primary); }
+    .stat-card-green  { border-left:4px solid var(--green); }
+    .stat-card-amber  { border-left:4px solid var(--amber); }
+    .stat-card-red    { border-left:4px solid var(--red); }
+    .review-card { border-top:3px solid var(--amber); }
+    tbody tr { transition:background .12s; }
+    tbody tr:hover { background:#EEF2FF; }
+    th { background:#F8FAFF;color:var(--muted);font-size:.7rem;text-transform:uppercase;letter-spacing:.07em;padding:.75rem 1.25rem;text-align:left;border-bottom:1px solid var(--border); }
+    td { padding:.875rem 1.25rem;border-bottom:1px solid var(--border);font-size:.875rem; }
+    .chip        { display:inline-flex;align-items:center;gap:4px;padding:2px 10px;border-radius:20px;font-size:.72rem;font-weight:600;white-space:nowrap; }
+    .chip-indigo { background:#EEF2FF;color:#4338CA; }
+    .chip-green  { background:#DCFCE7;color:#166534; }
+    .chip-amber  { background:#FEF3C7;color:#92400E;border:1px solid #F59E0B55; }
+    .chip-red    { background:#FEE2E2;color:#991B1B; }
+    .chip-grey   { background:#F1F5F9;color:#475569; }
+    .pipeline { display:flex;gap:4px;align-items:center;margin-top:4px;flex-wrap:wrap; }
+    .pipe-step { font-size:.62rem;padding:2px 6px;border-radius:6px;font-weight:600;white-space:nowrap; }
+    .pipe-done { background:#DCFCE7;color:#166534; }
+    .pipe-active { background:#EEF2FF;color:#4338CA;border:1px solid #4F6CF755; }
+    .pipe-todo { background:#F8FAFC;color:#94A3B8; }
+    .pipe-pay { background:#D1FAE5;color:#065F46; }
+    .pipe-failed { background:#FEE2E2;color:#991B1B;border:1px solid #EF4444; }
+    .pipe-rerun { background:#EEF2FF;color:#4338CA;border:1px dashed #818CF8; }
+    .stat-amount { display:flex;align-items:baseline;gap:6px;flex-wrap:wrap; }
+    .stat-currency { font-size:1.125rem;font-weight:700;opacity:.85;letter-spacing:.02em; }
+    .stat-value { font-size:1.875rem;font-weight:800;line-height:1.1;font-variant-numeric:tabular-nums; }
+    .modal-img-stack { position:relative;display:inline-block;line-height:0;max-width:100%; }
+    .modal-img-stack img { display:block;max-width:100%;height:auto;border-radius:.5rem; }
+    .modal-img-stack svg { position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none; }
+    .btn { display:inline-flex;align-items:center;gap:6px;padding:6px 16px;border-radius:8px;font-size:.8rem;font-weight:600;cursor:pointer;border:none;transition:filter .15s; }
+    .btn:hover { filter:brightness(.93); }
+    .btn-primary { background:var(--primary);color:#fff; }
+    .btn-green   { background:var(--green);color:#fff; }
+    .btn-red     { background:var(--red);color:#fff; }
+    .btn-ghost   { background:#F1F5F9;color:var(--body);border:1px solid var(--border); }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    .spinner { width:12px;height:12px;border:2px solid #CBD5E1;border-top-color:var(--primary);border-radius:50%;animation:spin .7s linear infinite;display:inline-block; }
+    @keyframes fadeUp { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
+    .fade-in { animation:fadeUp .25s ease; }
+    .nav-active { background:var(--primary)!important;color:#fff!important; }
+    .nav-link { display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:12px;font-size:.875rem;font-weight:500;color:#94A3B8;cursor:pointer;transition:background .15s,color .15s;text-decoration:none; }
+    .nav-link:hover { background:rgba(255,255,255,.06);color:#CBD5E1; }
+    .nav-link.nav-active { color:#fff; }
+    /* Analytics donut */
+    .donut-ring { fill:none;stroke-width:18; }
+    /* Filter tabs */
+    .tab { padding:6px 16px;border-radius:8px;font-size:.8rem;font-weight:600;cursor:pointer;border:1px solid var(--border);background:#fff;color:var(--muted);transition:all .15s; }
+    .tab.active { background:var(--primary);color:#fff;border-color:var(--primary); }
+    /* Search input */
+    .search-input { width:100%;padding:8px 14px;border:1px solid var(--border);border-radius:10px;font-size:.875rem;outline:none;transition:border-color .15s; }
+    .search-input:focus { border-color:var(--primary); }
+    .edit-input { width:100%;padding:6px 10px;border:1px solid var(--border);border-radius:8px;font-size:.8125rem;outline:none; }
+    .edit-input:focus { border-color:var(--primary); }
+    .edit-grid { display:grid;grid-template-columns:1fr 1fr;gap:10px; }
+    @media (max-width:640px){ .edit-grid { grid-template-columns:1fr; } }
+    /* Section pages */
+    .page { display:none; }
+    .page.active { display:block; }
+    /* Payment card */
+    .pay-card { background:#fff;border-radius:1rem;border:1px solid var(--border);padding:1.25rem 1.5rem;transition:box-shadow .15s; }
+    .pay-card:hover { box-shadow:0 4px 20px rgba(79,108,247,.12); }
+    /* Copy flash */
+    .copy-flash { color:var(--green)!important; }
+    /* Invoice image modal */
+    .modal-overlay { position:fixed;inset:0;background:rgba(15,23,42,.55);backdrop-filter:blur(3px);z-index:50;display:none;align-items:center;justify-content:center;padding:24px; }
+    .modal-overlay.open { display:flex;animation:fadeUp .2s ease; }
+    .modal-box { background:#fff;border-radius:1rem;max-width:1040px;width:100%;max-height:90vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(15,23,42,.35); }
+    .modal-head { display:flex;justify-content:space-between;align-items:center;padding:1rem 1.5rem;border-bottom:1px solid var(--border); }
+    .modal-body { display:flex;gap:1.5rem;padding:1.5rem;overflow:auto;flex-wrap:wrap; }
+    .modal-img-wrap { flex:1 1 420px;min-width:300px;background:#F8FAFF;border:1px solid var(--border);border-radius:.75rem;padding:8px;display:flex;align-items:flex-start;justify-content:center; }
+    .modal-img-wrap img { max-width:100%;height:auto;border-radius:.5rem; }
+    .modal-side { flex:1 1 320px;min-width:280px; }
+    .ocr-field-row { display:flex;justify-content:space-between;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid var(--border); }
+    .conf-bar { height:6px;border-radius:6px;background:#F0F4FF;width:80px;overflow:hidden;flex-shrink:0; }
+    .conf-bar > div { height:100%;border-radius:6px; }
+    .modal-close { cursor:pointer;border:none;background:#F1F5F9;color:var(--body);width:32px;height:32px;border-radius:8px;font-size:1rem;line-height:1; }
+    .modal-close:hover { background:#E2E8F0; }
+    #toast-root { position:fixed;bottom:24px;right:24px;z-index:60;display:flex;flex-direction:column;gap:8px;max-width:360px; }
+    .toast { padding:12px 16px;border-radius:12px;font-size:.8125rem;line-height:1.45;box-shadow:0 8px 24px rgba(15,23,42,.18);animation:fadeUp .2s ease; }
+    .toast-success { background:#ECFDF5;color:#065F46;border:1px solid #A7F3D0; }
+    .toast-error { background:#FEF2F2;color:#991B1B;border:1px solid #FECACA; }
+    .toast-info { background:#EEF2FF;color:#3730A3;border:1px solid #C7D2FE; }
+    tr.row-flash { animation:rowFlash 1.2s ease; }
+    @keyframes rowFlash { 0%,100%{background:transparent} 30%{background:#EEF2FF} }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════ SIDEBAR ═══════════════ -->
+<aside class="fixed left-0 top-0 h-full w-60 flex flex-col z-20" style="background:#1E2B4A">
+  <div class="px-6 py-5" style="border-bottom:1px solid rgba(255,255,255,.08)">
+    <div class="text-white font-bold text-xl tracking-tight">Invo<span style="color:#4F6CF7">Sense</span></div>
+    <p class="text-xs mt-0.5" style="color:#94A3B8">AI Invoice Pipeline</p>
+  </div>
+
+  <nav class="flex-1 px-3 py-4 space-y-1">
+    <a class="nav-link nav-active" id="nav-dashboard" onclick="showPage('dashboard')">
+      <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+      Dashboard
+    </a>
+    <a class="nav-link" id="nav-invoices" onclick="showPage('invoices')">
+      <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+      Invoices
+    </a>
+    <a class="nav-link" id="nav-payments" onclick="showPage('payments')">
+      <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      Payments
+    </a>
+    <a class="nav-link" id="nav-analytics" onclick="showPage('analytics')">
+      <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+      Analytics
+    </a>
+  </nav>
+
+  <div class="px-4 py-4" style="border-top:1px solid rgba(255,255,255,.08)">
+    <div id="gmail-status" class="text-xs px-2.5 py-1.5 rounded-lg font-semibold mb-2" style="background:rgba(255,255,255,.06);color:#94A3B8">Gmail: checking…</div>
+    <span class="text-xs px-2.5 py-1 rounded-full font-semibold" style="background:rgba(6,182,212,.12);color:#06B6D4">● Base Sepolia Testnet</span>
+    <p class="text-xs mt-2 leading-relaxed" style="color:#64748B">Harness Engineering Hackathon · 2026</p>
+  </div>
+</aside>
+
+<!-- ═══════════════ MAIN ═══════════════ -->
+<main class="ml-60 min-h-screen" style="background:#F0F4FF">
+
+  <!-- Sticky header -->
+  <header class="sticky top-0 z-10 flex justify-between items-center px-8 py-4" style="background:rgba(240,244,255,.9);backdrop-filter:blur(12px);border-bottom:1px solid #E2E8F0">
+    <div>
+      <h1 id="page-title" class="text-lg font-bold" style="color:#0F172A">Dashboard</h1>
+      <p id="page-sub" class="text-xs leading-relaxed" style="color:#6B7280">Autonomous accounts-payable pipeline — ingest, extract, compliance, and settlement</p>
+    </div>
+    <div class="flex items-center gap-3">
+      <div id="last-updated" class="text-xs" style="color:#6B7280">Loading…</div>
+      <div id="poll-spinner" class="spinner" style="visibility:hidden"></div>
+    </div>
+  </header>
+
+  <!-- ════════════ PAGE: DASHBOARD ════════════ -->
+  <div id="page-dashboard" class="page active px-8 py-6 space-y-6">
+
+    <!-- Stats -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+      <div class="card stat-card-indigo p-6 fade-in">
+        <p class="text-xs font-semibold uppercase tracking-wider mb-2" style="color:#6B7280">Invoices Processed</p>
+        <div class="stat-amount mb-2">
+          <span id="stat-processed" class="stat-value" style="color:#4F6CF7">—</span>
+        </div>
+        <p class="text-xs leading-relaxed" style="color:#94A3B8">Attachments received this session via Gmail, upload, or folder watch</p>
+      </div>
+      <div class="card stat-card-green p-6 fade-in" style="animation-delay:.05s">
+        <p class="text-xs font-semibold uppercase tracking-wider mb-2" style="color:#6B7280">Settled (X402)</p>
+        <div class="stat-amount mb-2">
+          <span class="stat-currency" style="color:#10B981">RM</span>
+          <span id="stat-paid" class="stat-value" style="color:#10B981">0.00</span>
+        </div>
+        <p id="stat-paid-sub" class="text-xs leading-relaxed" style="color:#94A3B8">Malaysian Ringgit paid on Base Sepolia testnet</p>
+      </div>
+      <div class="card stat-card-amber p-6 fade-in" style="animation-delay:.1s">
+        <p class="text-xs font-semibold uppercase tracking-wider mb-2" style="color:#6B7280">Blocked / Review</p>
+        <div class="stat-amount mb-2">
+          <span class="stat-currency" style="color:#F59E0B">RM</span>
+          <span id="stat-review" class="stat-value" style="color:#F59E0B">0.00</span>
+        </div>
+        <p id="stat-review-sub" class="text-xs leading-relaxed" style="color:#94A3B8">Compliance rejected or awaiting manual approval</p>
+      </div>
+    </div>
+
+    <!-- Human Review -->
+    <div id="review-section" class="hidden fade-in">
+      <div class="flex items-center gap-3 mb-4">
+        <h2 class="text-base font-bold" style="color:#0F172A">⚠ Needs Your Attention</h2>
+        <span id="review-count-badge" class="chip chip-amber">0 pending</span>
+      </div>
+      <div id="review-cards" class="space-y-4"></div>
+    </div>
+
+    <!-- Invoice table -->
+    <div class="card fade-in" style="animation-delay:.15s">
+      <div class="flex items-center justify-between px-6 pt-5 pb-3">
+        <h2 class="text-base font-bold" style="color:#0F172A">All Invoices</h2>
+        <span class="text-xs" style="color:#94A3B8">Auto-refreshes every 5 s</span>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full">
+          <thead><tr>
+            <th>Invoice ID</th><th>Vendor</th><th>Amount (MYR)</th>
+            <th>AI Decision</th><th>Pipeline</th><th>Status</th><th>Actions</th>
+          </tr></thead>
+          <tbody id="invoice-tbody">
+            <tr><td colspan="7" class="text-center py-8" style="color:#94A3B8">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="px-6 py-3 text-xs" style="color:#94A3B8">* MOCK FX: 1 MYR = 0.22 USDC — testnet only</p>
+    </div>
+
+    <!-- Transaction Log -->
+    <div>
+      <button onclick="toggleTxLog()" class="btn btn-ghost w-full flex justify-between items-center mb-2 px-5 py-3 rounded-xl" style="font-size:.85rem">
+        <span id="tx-log-label">Transaction Log</span>
+        <span id="tx-log-chevron" style="font-size:.75rem;color:#6B7280">▼ Expand</span>
+      </button>
+      <div id="tx-log" class="hidden card fade-in">
+        <p class="px-6 pt-4 pb-2 text-xs font-semibold" style="color:#F59E0B">* MOCK FX: 1 MYR = 0.22 USDC — testnet only, not a real exchange rate</p>
+        <div class="overflow-x-auto">
+          <table class="w-full">
+            <thead><tr>
+              <th>Invoice</th><th>Tx Hash</th><th>Network</th>
+              <th>USDC *</th><th>cited.md</th><th>Timestamp</th>
+            </tr></thead>
+            <tbody id="tx-tbody">
+              <tr><td colspan="6" class="text-center py-6" style="color:#94A3B8">No paid transactions yet.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <footer class="text-center py-4 text-xs leading-relaxed" style="color:#94A3B8;border-top:1px solid #E2E8F0">
+      InvoSense · Harness Engineering Hackathon · Base Sepolia Testnet · Mock FX 1 RM = 0.22 USDC
+    </footer>
+  </div><!-- /dashboard -->
+
+  <!-- ════════════ PAGE: INVOICES ════════════ -->
+  <div id="page-invoices" class="page px-8 py-6 space-y-5">
+    <!-- Search + filters -->
+    <div class="card p-4 fade-in">
+      <div class="flex flex-wrap gap-3 items-center">
+        <div class="flex-1 min-w-48">
+          <input id="inv-search" class="search-input" type="text" placeholder="Search by Invoice ID or Vendor…" oninput="renderInvoicesPage()">
+        </div>
+        <div class="flex gap-2 flex-wrap" id="inv-filters">
+          <button class="tab active" data-filter="ALL"          onclick="setFilter('ALL',this)">All</button>
+          <button class="tab"        data-filter="PAY"          onclick="setFilter('PAY',this)">PAY</button>
+          <button class="tab"        data-filter="FLAG"         onclick="setFilter('FLAG',this)">Flagged</button>
+          <button class="tab"        data-filter="HUMAN_REVIEW" onclick="setFilter('HUMAN_REVIEW',this)">Review</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Invoice detail cards -->
+    <div id="inv-cards" class="space-y-4"></div>
+  </div><!-- /invoices -->
+
+  <!-- ════════════ PAGE: PAYMENTS ════════════ -->
+  <div id="page-payments" class="page px-8 py-6 space-y-5">
+
+    <!-- Payment summary cards -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-5 fade-in">
+      <div class="card stat-card-green p-6">
+        <p class="text-xs font-semibold uppercase tracking-wider mb-1" style="color:#6B7280">Total Settled</p>
+        <p id="pay-total-usdc" class="text-3xl font-bold" style="color:#10B981">$0 USDC</p>
+        <p class="text-xs mt-1" style="color:#94A3B8">across all paid invoices *</p>
+      </div>
+      <div class="card stat-card-indigo p-6">
+        <p class="text-xs font-semibold uppercase tracking-wider mb-1" style="color:#6B7280">Transactions</p>
+        <p id="pay-count" class="text-3xl font-bold" style="color:#4F6CF7">0</p>
+        <p class="text-xs mt-1" style="color:#94A3B8">on Base Sepolia</p>
+      </div>
+      <div class="card stat-card-amber p-6">
+        <p class="text-xs font-semibold uppercase tracking-wider mb-1" style="color:#6B7280">Total (MYR)</p>
+        <p id="pay-total-myr" class="text-3xl font-bold" style="color:#F59E0B">MYR 0</p>
+        <p class="text-xs mt-1" style="color:#94A3B8">pre-conversion value</p>
+      </div>
+    </div>
+
+    <p class="text-xs px-1" style="color:#94A3B8">* MOCK FX: 1 MYR = 0.22 USDC — testnet only, not a real exchange rate</p>
+
+    <!-- Payment records -->
+    <div id="pay-cards" class="space-y-3"></div>
+  </div><!-- /payments -->
+
+  <!-- ════════════ PAGE: ANALYTICS ════════════ -->
+  <div id="page-analytics" class="page px-8 py-6 space-y-5">
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+
+      <!-- Decision breakdown donut -->
+      <div class="card p-6 fade-in">
+        <h3 class="text-sm font-bold mb-4" style="color:#0F172A">AI Decision Breakdown</h3>
+        <div class="flex items-center gap-8">
+          <svg viewBox="0 0 100 100" class="w-36 h-36 flex-shrink-0" style="transform:rotate(-90deg)">
+            <circle cx="50" cy="50" r="36" fill="none" stroke="#EEF2FF" stroke-width="18"/>
+            <circle id="donut-pay"    cx="50" cy="50" r="36" fill="none" stroke="#4F6CF7" stroke-width="18" stroke-dasharray="0 226" stroke-linecap="round"/>
+            <circle id="donut-flag"   cx="50" cy="50" r="36" fill="none" stroke="#EF4444" stroke-width="18" stroke-dasharray="0 226" stroke-linecap="round"/>
+            <circle id="donut-review" cx="50" cy="50" r="36" fill="none" stroke="#F59E0B" stroke-width="18" stroke-dasharray="0 226" stroke-linecap="round"/>
+          </svg>
+          <div class="space-y-3 flex-1" id="donut-legend"></div>
+        </div>
+      </div>
+
+      <!-- Status breakdown -->
+      <div class="card p-6 fade-in" style="animation-delay:.05s">
+        <h3 class="text-sm font-bold mb-4" style="color:#0F172A">Status Breakdown</h3>
+        <div id="status-bars" class="space-y-3"></div>
+      </div>
+    </div>
+
+    <!-- Value analysis -->
+    <div class="card p-6 fade-in" style="animation-delay:.1s">
+      <h3 class="text-sm font-bold mb-4" style="color:#0F172A">Value Analysis (MYR)</h3>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4" id="value-analysis"></div>
+    </div>
+
+    <!-- Vendor table -->
+    <div class="card fade-in" style="animation-delay:.15s">
+      <div class="px-6 pt-5 pb-3">
+        <h3 class="text-sm font-bold" style="color:#0F172A">Vendor Summary</h3>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full">
+          <thead><tr>
+            <th>Vendor</th><th>Invoice ID</th><th>Amount (MYR)</th><th>AI Decision</th><th>Status</th>
+          </tr></thead>
+          <tbody id="vendor-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <p class="text-xs px-1" style="color:#94A3B8">* MOCK FX: 1 MYR = 0.22 USDC — testnet only</p>
+  </div><!-- /analytics -->
+
+</main>
+
+<div id="toast-root"></div>
+
+<!-- ═══════════════ INVOICE IMAGE MODAL ═══════════════ -->
+<div id="img-modal" class="modal-overlay" onclick="if(event.target===this)closeInvoiceModal()">
+  <div class="modal-box">
+    <div class="modal-head">
+      <div>
+        <h3 id="modal-title" class="text-base font-bold" style="color:#0F172A">Invoice</h3>
+        <p id="modal-sub" class="text-xs" style="color:#6B7280">Extracted fields &amp; detected bounding boxes</p>
+      </div>
+      <button class="modal-close" onclick="closeInvoiceModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-img-wrap">
+        <div id="modal-img-stack" class="modal-img-stack">
+          <img id="modal-img" alt="Annotated invoice with bounding boxes" />
+          <svg id="modal-boxes" xmlns="http://www.w3.org/2000/svg"></svg>
+        </div>
+      </div>
+      <div class="modal-side">
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-xs font-semibold uppercase tracking-wider" style="color:#6B7280">OCR Confidence</span>
+          <span id="modal-overall" class="chip chip-green">—</span>
+        </div>
+        <div id="modal-fields"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="reject-modal" class="modal-overlay" onclick="if(event.target===this)closeRejectionModal()">
+  <div class="modal-box" style="max-width:720px">
+    <div class="modal-head">
+      <div>
+        <h3 id="reject-modal-title" class="text-base font-bold" style="color:#0F172A">Rejection reason</h3>
+        <p id="reject-modal-sub" class="text-xs" style="color:#6B7280">Compliance check failed</p>
+      </div>
+      <button class="modal-close" onclick="closeRejectionModal()">✕</button>
+    </div>
+    <div class="p-6" id="reject-modal-body"></div>
+  </div>
+</div>
+
+<!-- ═══════════════ JAVASCRIPT ═══════════════ -->
+<script>
+// ── State ────────────────────────────────────────────────
+let _records   = [];
+let _recordsSnapshot = ''; // skip DOM rebuild when poll returns identical data
+let _invFilter = 'ALL';
+let _activePage = 'dashboard';
+let _pollTimer = null;
+
+// ── Formatters ────────────────────────────────────────────
+const fmtMyr  = n => 'MYR ' + Number(n).toLocaleString('en-MY',{minimumFractionDigits:2,maximumFractionDigits:2});
+const fmtUsdc = n => '$' + Number(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}) + ' USDC';
+const shortHash = h => h ? h.slice(0,10)+'…'+h.slice(-6) : '—';
+const fmtTime = iso => iso ? new Date(iso).toLocaleString('en-MY',{dateStyle:'short',timeStyle:'short'}) : '—';
+
+// ── Badges ────────────────────────────────────────────────
+function statusBadge(s) {
+  switch(s) {
+    case 'processing':
+      return `<span class="chip chip-grey"><span class="spinner"></span> Processing</span>`;
+    case 'PAY_QUEUED':
+      return `<span class="chip chip-indigo"><span class="spinner"></span> Pay queued</span>`;
+    case 'PAID':         return `<span class="chip chip-green">✓ Paid (X402)</span>`;
+    case 'HUMAN_REVIEW': return `<span class="chip chip-amber">⚠ Needs Review</span>`;
+    case 'FLAG':         return `<span class="chip chip-red">⚑ Flagged</span>`;
+    case 'REJECTED':     return `<span class="chip chip-red">✕ Rejected</span>`;
+    case 'ERROR':        return `<span class="chip chip-red">! Error</span>`;
+    default:             return `<span class="chip chip-grey">${s}</span>`;
+  }
+}
+
+function pipelineHtml(r) {
+  if (!r.pipeline) return '<span class="text-xs" style="color:#94A3B8">—</span>';
+  const steps = r.pipeline.steps.map(s => {
+    const cls = s.failed ? 'pipe-failed' : s.done ? 'pipe-done' : s.active ? 'pipe-active' : 'pipe-todo';
+    return `<span class="pipe-step ${cls}">${s.label}${s.active?' …':''}${s.failed?' ✕':''}</span>`;
+  }).join('');
+  const payStep = r.status === 'PAID'
+    ? `<span class="pipe-step pipe-pay">X402 Paid</span>`
+    : (r.status === 'processing' && r.decision.decision === 'PAY')
+      ? `<span class="pipe-step pipe-active">X402 Pay …</span>`
+      : (r.backend_decision === 'auto_approve' && r.status === 'PAY_QUEUED')
+        ? `<span class="pipe-step pipe-active">X402 Pay</span>` : '';
+  const rerunStep = r.pipeline.manually_rerun
+    ? `<span class="pipe-step pipe-rerun" title="Compliance manually re-run after field edit${r.pipeline.corrected_at ? ' · ' + fmtTime(r.pipeline.corrected_at) : ''}">↻ Manual re-run${r.pipeline.correction_count > 1 ? ' ×' + r.pipeline.correction_count : ''}</span>`
+    : '';
+  return `<div class="pipeline">${steps}${rerunStep}${payStep}</div>`;
+}
+function decisionBadge(d) {
+  switch(d) {
+    case 'PAY':          return `<span class="chip chip-indigo">PAY</span>`;
+    case 'FLAG':         return `<span class="chip chip-red">FLAG</span>`;
+    case 'HUMAN_REVIEW': return `<span class="chip chip-amber">REVIEW</span>`;
+    default:             return `<span class="chip chip-grey">${d}</span>`;
+  }
+}
+
+// ── Navigation ────────────────────────────────────────────
+function showPage(name) {
+  _activePage = name;
+  // Update nav links
+  ['dashboard','invoices','payments','analytics'].forEach(p => {
+    const el = document.getElementById('nav-' + p);
+    el.classList.toggle('nav-active', p === name);
+  });
+  // Update page sections
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  // Update header
+  const titles = { dashboard:'Dashboard', invoices:'Invoices', payments:'Payments', analytics:'Analytics' };
+  const subs   = {
+    dashboard: 'Autonomous accounts-payable pipeline — ingest, extract, compliance, and settlement',
+    invoices:  'Search and review invoice records across the full processing lifecycle',
+    payments:  'X402 settlements recorded on Base Sepolia testnet',
+    analytics: 'Decision outcomes and value distribution across your invoice portfolio',
+  };
+  document.getElementById('page-title').textContent = titles[name];
+  document.getElementById('page-sub').textContent   = subs[name];
+  // Render the newly active page with current data
+  renderPage(name, _records);
+}
+
+// Compact snapshot — only fields that affect the UI
+function snapshotRecords(records) {
+  return JSON.stringify(records.map(r => ({
+    id: r.decision.invoice_id,
+    status: r.status,
+    decision: r.decision.decision,
+    reasons: r.decision.reasons ?? [],
+    pipe: r.pipeline?.backend_status ?? null,
+    rerun: r.pipeline?.manually_rerun ?? false,
+    rerunCount: r.pipeline?.correction_count ?? 0,
+    amount: r.decision.amount_myr,
+    tx: r.payment?.tx_hash ?? null,
+    pub: r.publish?.url ?? null,
+    err: r.error ?? null,
+  })));
+}
+
+function showToast(message, kind = 'info') {
+  const root = document.getElementById('toast-root');
+  if (!root) return;
+  const el = document.createElement('div');
+  el.className = `toast toast-${kind}`;
+  el.textContent = message;
+  root.appendChild(el);
+  setTimeout(() => el.remove(), 6000);
+}
+
+function flashInvoiceRow(id) {
+  const rows = document.querySelectorAll('#invoice-tbody tr');
+  for (const row of rows) {
+    if (row.textContent.includes(id.slice(0, 8))) {
+      row.classList.remove('row-flash');
+      void row.offsetWidth;
+      row.classList.add('row-flash');
+      break;
+    }
+  }
+}
+
+function describeCorrectionResult(record) {
+  if (!record) return 'Compliance re-run completed.';
+  const id = record.decision?.invoice_id?.slice(0, 8) ?? 'Invoice';
+  if (record.status === 'PAID' || record.decision?.decision === 'PAY') {
+    return `${id}… approved — ready for X402 payment.`;
+  }
+  if (record.status === 'REJECTED' || record.decision?.decision === 'FLAG') {
+    const reason = record.decision?.reasons?.[0] ?? 'Compliance still failing.';
+    return `${id}… still rejected: ${reason}`;
+  }
+  if (record.status === 'HUMAN_REVIEW') {
+    return `${id}… passed compliance — awaiting your approval.`;
+  }
+  return `${id}… compliance re-run finished (${record.status}).`;
+}
+
+// ── Master render ─────────────────────────────────────────
+function renderAll(records, force = false) {
+  const snap = snapshotRecords(records);
+  document.getElementById('last-updated').textContent =
+    'Updated ' + new Date().toLocaleTimeString('en-MY');
+
+  // Poll returns the same data every 5 s — skip full innerHTML rebuild to avoid flicker
+  if (!force && snap === _recordsSnapshot) return;
+
+  _recordsSnapshot = snap;
+  _records = records;
+  renderPage(_activePage, records);
+}
+
+function renderPage(name, records) {
+  if (name === 'dashboard') renderDashboard(records);
+  if (name === 'invoices')  renderInvoicesPage(records);
+  if (name === 'payments')  renderPayments(records);
+  if (name === 'analytics') renderAnalytics(records);
+}
+
+// ── DASHBOARD ─────────────────────────────────────────────
+function renderDashboard(records) {
+  const paid     = records.filter(r => r.status === 'PAID');
+  const flagged  = records.filter(r => r.status === 'FLAG');
+  const review   = records.filter(r => r.status === 'HUMAN_REVIEW');
+  const rejected = records.filter(r => r.status === 'REJECTED');
+  const totalMyr       = paid.reduce((s,r) => s + r.decision.amount_myr, 0);
+  const blockedMyr     = [...flagged, ...review, ...rejected].reduce((s,r) => s + r.decision.amount_myr, 0);
+
+  document.getElementById('stat-processed').textContent = records.length;
+  document.getElementById('stat-paid').textContent      = Number(totalMyr).toLocaleString('en-MY',{minimumFractionDigits:2,maximumFractionDigits:2});
+  document.getElementById('stat-review').textContent    = Number(blockedMyr).toLocaleString('en-MY',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const paidSub = document.getElementById('stat-paid-sub');
+  if (paidSub) {
+    paidSub.textContent = paid.length
+      ? `${paid.length} invoice${paid.length === 1 ? '' : 's'} settled via X402 on testnet`
+      : 'No invoices settled yet on testnet';
+  }
+  const sub = document.getElementById('stat-review-sub');
+  if (sub) {
+    sub.textContent = `${rejected.length} rejected · ${flagged.length} flagged · ${review.length} awaiting approval`;
+  }
+
+  // Review panel
+  const reviewSection = document.getElementById('review-section');
+  const reviewCards   = document.getElementById('review-cards');
+  document.getElementById('review-count-badge').textContent = review.length + ' pending';
+  if (review.length > 0) {
+    reviewSection.classList.remove('hidden');
+    reviewCards.innerHTML = review.map(r => `
+      <div class="card review-card p-6">
+        <div class="flex flex-wrap items-start justify-between gap-4 mb-4">
+          <div>
+            <div class="flex items-center gap-3 mb-1">
+              <span class="font-mono text-xs font-bold" style="color:#4F6CF7">${r.decision.invoice_id}</span>
+              <span class="chip chip-amber">⚠ HUMAN_REVIEW</span>
+            </div>
+            <p class="text-lg font-bold" style="color:#0F172A">${r.decision.vendor}</p>
+            <p class="text-2xl font-bold mt-1" style="color:#0F172A">${fmtMyr(r.decision.amount_myr)}</p>
+          </div>
+          <div class="flex gap-2 flex-wrap">
+            <button class="btn btn-green" onclick="approve('${r.decision.invoice_id}')">
+              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+              Approve &amp; Pay
+            </button>
+            <button class="btn btn-red" onclick="reject('${r.decision.invoice_id}')">
+              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M6 18L18 6M6 6l12 12"/></svg>
+              Reject
+            </button>
+          </div>
+        </div>
+        ${r.decision.reasons.length ? `
+          <div class="rounded-xl p-3 mb-3" style="background:#FEF3C7">
+            <p class="text-xs font-semibold mb-1.5" style="color:#92400E">FLAGS / REASONS</p>
+            <ul class="space-y-1">
+              ${r.decision.reasons.map(x => `<li class="flex items-start gap-2 text-sm" style="color:#92400E"><span>•</span><span>${x}</span></li>`).join('')}
+            </ul>
+          </div>` : ''}
+        <div class="flex items-center gap-3 flex-wrap">
+          <a href="${resolveSourceLink(r.decision.tax_rule_url)}" target="_blank" rel="noopener noreferrer"
+             class="text-xs hover:underline" style="color:#4F6CF7">Tax ruling ↗</a>
+          ${imageBtn(r)}
+        </div>
+      </div>`).join('');
+  } else {
+    reviewSection.classList.add('hidden');
+  }
+
+  // Invoice table
+  const tbody = document.getElementById('invoice-tbody');
+  tbody.innerHTML = records.length === 0
+    ? `<tr><td colspan="7" class="text-center py-8" style="color:#94A3B8">No invoices yet — send an email with an attachment.</td></tr>`
+    : records.map(r => {
+        const actions = r.status === 'ERROR'
+          ? `<button class="btn btn-primary" style="padding:4px 12px;font-size:.75rem" onclick="retryInvoice('${r.decision.invoice_id}')">Retry</button>`
+          : r.status === 'HUMAN_REVIEW'
+          ? `<div class="flex gap-2">
+               <button class="btn btn-green" style="padding:4px 12px;font-size:.75rem" onclick="approve('${r.decision.invoice_id}')">Approve</button>
+               <button class="btn btn-red"   style="padding:4px 12px;font-size:.75rem" onclick="reject('${r.decision.invoice_id}')">Reject</button>
+             </div>`
+          : '';
+        const errHint = r.status === 'ERROR' && r.error
+          ? `<div class="text-xs mt-1" style="color:#EF4444;max-width:220px" title="${r.error.replace(/"/g,'&quot;')}">${r.error.includes('ClickHouse')||r.error.includes('timeout')?'Compliance DB timeout — click Retry':r.error.slice(0,60)+'…'}</div>`
+          : '';
+        const rowBg = r.status === 'HUMAN_REVIEW' ? 'style="background:#FFFBEB"'
+                    : r.status === 'PAID'          ? 'style="background:#F0FDF4"'
+                    : isRejected(r)              ? 'style="background:#FEF2F2"' : '';
+        return `<tr ${rowBg}>
+          <td><span class="font-mono text-xs font-semibold" style="color:#4F6CF7">${r.decision.invoice_id.slice(0,8)}…</span>
+            <div class="text-xs" style="color:#94A3B8">${r.pipeline?.filename ?? ''}</div></td>
+          <td style="color:#0F172A;font-weight:500">${r.decision.vendor}</td>
+          <td style="color:#0F172A;font-weight:600;font-variant-numeric:tabular-nums">${fmtMyr(r.decision.amount_myr)}</td>
+          <td>${decisionBadge(r.decision.decision)}</td>
+          <td>${pipelineHtml(r)}</td>
+          <td>${statusBadge(r.status)}${errHint}</td>
+          <td><div class="flex items-center gap-2 flex-wrap">${actions}${rejectionBtn(r)}${editBtn(r)}${imageBtn(r)}</div></td>
+        </tr>`;
+      }).join('');
+
+  // Tx log
+  const paid2 = records.filter(r => r.status === 'PAID' && r.payment);
+  const txLabel = document.getElementById('tx-log-label');
+  if (txLabel) txLabel.textContent = `Transaction Log (${paid2.length} paid)`;
+  const txTbody = document.getElementById('tx-tbody');
+  txTbody.innerHTML = paid2.length === 0
+    ? `<tr><td colspan="6" class="text-center py-6" style="color:#94A3B8">No paid transactions yet.</td></tr>`
+    : paid2.map((r,i) => `<tr>
+        <td><span class="font-mono text-xs font-semibold" style="color:#4F6CF7">${r.decision.invoice_id}</span><br>
+            <span class="text-xs" style="color:#6B7280">${r.decision.vendor}</span></td>
+        <td><div class="flex items-center gap-2">
+          <span class="font-mono text-xs">${shortHash(r.payment.tx_hash)}</span>
+          <button id="cb-${i}" onclick="copyHash('${r.payment.tx_hash}','cb-${i}')" class="btn btn-ghost" style="padding:2px 8px;font-size:.7rem">⎘</button>
+        </div></td>
+        <td><span class="chip chip-indigo">base-sepolia</span></td>
+        <td style="font-weight:600;color:#10B981">${fmtUsdc(r.payment.amount_usd)}</td>
+        <td>${r.publish ? `<a href="${r.publish.url}" target="_blank" style="color:#4F6CF7;font-size:.75rem">${r.publish.url.replace('https://','').slice(0,32)}… ↗</a>` : '—'}</td>
+        <td class="text-xs" style="color:#6B7280">${fmtTime(r.payment.timestamp)}</td>
+      </tr>`).join('');
+}
+
+// ── INVOICES PAGE ─────────────────────────────────────────
+function renderInvoicesPage(records) {
+  const src = records || _records;
+  const q   = (document.getElementById('inv-search')?.value || '').toLowerCase();
+  let filtered = src.filter(r => {
+    const matchFilter = _invFilter === 'ALL' || r.decision.decision === _invFilter;
+    const matchSearch = !q
+      || r.decision.invoice_id.toLowerCase().includes(q)
+      || r.decision.vendor.toLowerCase().includes(q);
+    return matchFilter && matchSearch;
+  });
+
+  const container = document.getElementById('inv-cards');
+  if (!container) return;
+  if (filtered.length === 0) {
+    container.innerHTML = `<div class="card p-8 text-center" style="color:#94A3B8">No invoices match your search.</div>`;
+    return;
+  }
+  container.innerHTML = filtered.map(r => `
+    <div class="card p-6" style="border-left:4px solid ${
+      r.status==='PAID'?'#10B981':isRejected(r)?'#EF4444':r.status==='HUMAN_REVIEW'?'#F59E0B':'#E2E8F0'}">
+      <div class="flex flex-wrap items-start justify-between gap-4 mb-4">
+        <div>
+          <div class="flex items-center gap-2 mb-1 flex-wrap">
+            <span class="font-mono text-sm font-bold" style="color:#4F6CF7">${r.decision.invoice_id}</span>
+            ${decisionBadge(r.decision.decision)}
+            ${statusBadge(r.status)}
+          </div>
+          <p class="text-base font-semibold" style="color:#0F172A">${r.decision.vendor}</p>
+          <p class="text-xl font-bold mt-0.5" style="color:#0F172A">${fmtMyr(r.decision.amount_myr)}</p>
+        </div>
+        ${r.status === 'HUMAN_REVIEW' ? `
+          <div class="flex gap-2">
+            <button class="btn btn-green" onclick="approve('${r.decision.invoice_id}')">✓ Approve &amp; Pay</button>
+            <button class="btn btn-red"   onclick="reject('${r.decision.invoice_id}')">✕ Reject</button>
+          </div>` : ''}
+      </div>
+
+      <!-- Line items -->
+      <div class="mb-3">
+        <p class="text-xs font-semibold uppercase tracking-wider mb-2" style="color:#6B7280">Line Items</p>
+        <div class="overflow-x-auto">
+          <table class="w-full" style="background:#F8FAFF;border-radius:.5rem;overflow:hidden">
+            <thead><tr>
+              <th style="font-size:.65rem">Description</th>
+              <th style="font-size:.65rem;text-align:right">Qty</th>
+              <th style="font-size:.65rem;text-align:right">Unit Price</th>
+              <th style="font-size:.65rem;text-align:right">Subtotal</th>
+            </tr></thead>
+            <tbody>
+              ${r.decision.line_items.map(li => `<tr>
+                <td style="font-size:.8rem">${li.description}</td>
+                <td style="text-align:right;font-size:.8rem">${li.qty}</td>
+                <td style="text-align:right;font-size:.8rem">${fmtMyr(li.unit_price)}</td>
+                <td style="text-align:right;font-size:.8rem;font-weight:600">${fmtMyr(li.qty*li.unit_price)}</td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      ${!isRejected(r) && r.decision.reasons.length ? `
+        <div class="rounded-lg p-3 mb-3" style="background:#FEF3C7">
+          <p class="text-xs font-semibold mb-1" style="color:#92400E">Review notes</p>
+          <ul>${r.decision.reasons.map(x=>`<li class="text-sm" style="color:#92400E">• ${x}</li>`).join('')}</ul>
+        </div>` : ''}
+
+      ${rejectionBlock(r)}
+
+      ${r.pipeline ? `<div class="mb-3">${pipelineHtml(r)}</div>` : ''}
+
+      <!-- Meta row -->
+      <div class="flex flex-wrap items-center gap-4">
+        <a href="${resolveSourceLink(r.decision.tax_rule_url)}" target="_blank" rel="noopener noreferrer" class="text-xs" style="color:#4F6CF7">📋 Tax ruling ↗</a>
+        ${rejectionBtn(r)}
+        ${imageBtn(r)}
+        ${r.payment ? `<span class="text-xs font-mono" style="color:#6B7280">tx: ${shortHash(r.payment.tx_hash)}</span>` : ''}
+        ${r.publish  ? `<a href="${r.publish.url}" target="_blank" class="text-xs" style="color:#4F6CF7">cited.md ↗</a>` : ''}
+      </div>
+    </div>`).join('');
+}
+
+function setFilter(f, btn) {
+  _invFilter = f;
+  document.querySelectorAll('#inv-filters .tab').forEach(t => t.classList.toggle('active', t === btn));
+  renderInvoicesPage();
+}
+
+// ── PAYMENTS PAGE ─────────────────────────────────────────
+function renderPayments(records) {
+  const paid = records.filter(r => r.status === 'PAID' && r.payment);
+  const totalMyr  = paid.reduce((s,r) => s + r.decision.amount_myr, 0);
+  const totalUsdc = paid.reduce((s,r) => s + r.payment.amount_usd, 0);
+
+  const el = id => document.getElementById(id);
+  el('pay-total-usdc').textContent = fmtUsdc(totalUsdc);
+  el('pay-count').textContent      = paid.length;
+  el('pay-total-myr').textContent  = fmtMyr(totalMyr);
+
+  const container = document.getElementById('pay-cards');
+  if (!container) return;
+  container.innerHTML = paid.length === 0
+    ? `<div class="card p-8 text-center" style="color:#94A3B8">No payments settled yet.</div>`
+    : paid.map((r,i) => `
+      <div class="pay-card">
+        <div class="flex flex-wrap items-start justify-between gap-4">
+          <div class="flex-1">
+            <div class="flex items-center gap-3 mb-1 flex-wrap">
+              <span class="font-mono text-sm font-bold" style="color:#4F6CF7">${r.decision.invoice_id}</span>
+              <span class="chip chip-green">✓ Paid</span>
+              <span class="chip chip-indigo">base-sepolia</span>
+            </div>
+            <p class="font-semibold" style="color:#0F172A">${r.decision.vendor}</p>
+            <div class="flex items-center gap-3 mt-2 flex-wrap">
+              <span class="text-xs font-mono px-3 py-1.5 rounded-lg flex items-center gap-2" style="background:#F0F4FF;color:#374151">
+                ${shortHash(r.payment.tx_hash)}
+                <button id="pb-${i}" onclick="copyHash('${r.payment.tx_hash}','pb-${i}')"
+                  class="ml-1" style="color:#4F6CF7;font-size:.75rem;cursor:pointer">⎘</button>
+              </span>
+              <span class="text-xs" style="color:#6B7280">${fmtTime(r.payment.timestamp)}</span>
+            </div>
+            ${r.publish ? `<a href="${r.publish.url}" target="_blank" class="text-xs mt-1 inline-block" style="color:#4F6CF7">cited.md record ↗</a>` : ''}
+          </div>
+          <div class="text-right flex-shrink-0">
+            <p class="text-2xl font-bold" style="color:#10B981">${fmtUsdc(r.payment.amount_usd)}</p>
+            <p class="text-sm font-semibold mt-0.5" style="color:#0F172A">${fmtMyr(r.decision.amount_myr)}</p>
+            <p class="text-xs mt-0.5" style="color:#94A3B8">MOCK FX: 1 MYR = 0.22 USDC</p>
+          </div>
+        </div>
+      </div>`).join('');
+}
+
+// ── ANALYTICS PAGE ────────────────────────────────────────
+function renderAnalytics(records) {
+  if (!records.length) return;
+
+  const circ = 2 * Math.PI * 36; // circumference
+  const byDecision = { PAY:0, FLAG:0, HUMAN_REVIEW:0 };
+  records.forEach(r => { if (byDecision[r.decision.decision] !== undefined) byDecision[r.decision.decision]++; });
+  const total = records.length;
+
+  // Donut — three segments stacked with stroke-dashoffset
+  const payPct    = byDecision.PAY / total;
+  const flagPct   = byDecision.FLAG / total;
+  const revPct    = byDecision.HUMAN_REVIEW / total;
+
+  const payDash  = payPct * circ;
+  const flagDash = flagPct * circ;
+  const revDash  = revPct * circ;
+
+  const setDonut = (id, dash, rest, offset) => {
+    const el = document.getElementById(id);
+    if (el) { el.style.strokeDasharray = `${dash} ${rest}`; el.style.strokeDashoffset = -offset; }
+  };
+  setDonut('donut-pay',    payDash,  circ, 0);
+  setDonut('donut-flag',   flagDash, circ, -(payDash));
+  setDonut('donut-review', revDash,  circ, -(payDash + flagDash));
+
+  const legend = document.getElementById('donut-legend');
+  if (legend) legend.innerHTML = [
+    { label:'PAY',          count:byDecision.PAY,          color:'#4F6CF7', pct:payPct  },
+    { label:'FLAG',         count:byDecision.FLAG,         color:'#EF4444', pct:flagPct },
+    { label:'HUMAN_REVIEW', count:byDecision.HUMAN_REVIEW, color:'#F59E0B', pct:revPct  },
+  ].map(d => `
+    <div class="flex items-center gap-3">
+      <span class="w-3 h-3 rounded-full flex-shrink-0" style="background:${d.color}"></span>
+      <div class="flex-1">
+        <div class="flex justify-between text-xs mb-0.5">
+          <span style="color:#374151;font-weight:600">${d.label}</span>
+          <span style="color:#6B7280">${d.count} (${Math.round(d.pct*100)}%)</span>
+        </div>
+        <div class="h-1.5 rounded-full" style="background:#F0F4FF">
+          <div class="h-full rounded-full" style="background:${d.color};width:${d.pct*100}%"></div>
+        </div>
+      </div>
+    </div>`).join('');
+
+  // Status bars
+  const byStatus = {};
+  records.forEach(r => { byStatus[r.status] = (byStatus[r.status]||0)+1; });
+  const statusColors = { PAID:'#10B981', FLAG:'#EF4444', HUMAN_REVIEW:'#F59E0B', REJECTED:'#EF4444', processing:'#94A3B8', PAY_QUEUED:'#94A3B8', ERROR:'#EF4444' };
+  const statusBars = document.getElementById('status-bars');
+  if (statusBars) statusBars.innerHTML = Object.entries(byStatus).map(([s,c]) => `
+    <div>
+      <div class="flex justify-between text-xs mb-1">
+        <span style="color:#374151;font-weight:600">${s}</span>
+        <span style="color:#6B7280">${c} / ${total}</span>
+      </div>
+      <div class="h-2 rounded-full" style="background:#F0F4FF">
+        <div class="h-full rounded-full transition-all" style="background:${statusColors[s]||'#94A3B8'};width:${(c/total)*100}%"></div>
+      </div>
+    </div>`).join('');
+
+  // Value analysis
+  const paid       = records.filter(r => r.status === 'PAID');
+  const totalPaid  = paid.reduce((s,r) => s+r.decision.amount_myr, 0);
+  const totalAll   = records.reduce((s,r) => s+r.decision.amount_myr, 0);
+  const totalRej   = records.filter(r => r.status==='REJECTED').reduce((s,r) => s+r.decision.amount_myr, 0);
+  const totalPend  = records.filter(r => r.status==='FLAG'||r.status==='HUMAN_REVIEW').reduce((s,r) => s+r.decision.amount_myr, 0);
+  const va = document.getElementById('value-analysis');
+  if (va) va.innerHTML = [
+    { label:'Total Pipeline',     value:fmtMyr(totalAll),  color:'#4F6CF7' },
+    { label:'Settled (PAID)',      value:fmtMyr(totalPaid), color:'#10B981' },
+    { label:'Rejected',           value:fmtMyr(totalRej),  color:'#EF4444' },
+    { label:'Pending Decision',   value:fmtMyr(totalPend), color:'#F59E0B' },
+  ].map(d => `
+    <div class="card p-4 text-center" style="border-top:3px solid ${d.color}">
+      <p class="text-xs font-semibold mb-1" style="color:#6B7280">${d.label}</p>
+      <p class="text-base font-bold" style="color:${d.color}">${d.value}</p>
+    </div>`).join('');
+
+  // Vendor table
+  const vt = document.getElementById('vendor-tbody');
+  if (vt) vt.innerHTML = records.map(r => `<tr>
+    <td style="font-weight:500;color:#0F172A">${r.decision.vendor}</td>
+    <td><span class="font-mono text-xs" style="color:#4F6CF7">${r.decision.invoice_id}</span></td>
+    <td style="font-weight:600">${fmtMyr(r.decision.amount_myr)}</td>
+    <td>${decisionBadge(r.decision.decision)}</td>
+    <td>${statusBadge(r.status)}</td>
+  </tr>`).join('');
+}
+
+// ── Actions ───────────────────────────────────────────────
+async function approve(id) {
+  try {
+    const res = await fetch(`/invoices/${id}/approve`,{method:'POST'});
+    if (!res.ok) { const b=await res.json().catch(()=>({error:'Error'})); alert(b.error); return; }
+    fetchInvoices(true);
+  } catch(e) { alert('Approve failed: '+e.message); }
+}
+async function reject(id) {
+  try {
+    const res = await fetch(`/invoices/${id}/reject`,{method:'POST'});
+    if (!res.ok) { const b=await res.json().catch(()=>({error:'Error'})); alert(b.error); return; }
+    fetchInvoices(true);
+  } catch(e) { alert('Reject failed: '+e.message); }
+}
+function copyHash(hash, btnId) {
+  navigator.clipboard.writeText(hash).catch(()=>{});
+  const btn = document.getElementById(btnId);
+  if (!btn) return;
+  btn.textContent = '✓'; btn.classList.add('copy-flash');
+  setTimeout(() => { btn.textContent='⎘'; btn.classList.remove('copy-flash'); }, 1500);
+}
+function toggleTxLog() {
+  const log=document.getElementById('tx-log'), ch=document.getElementById('tx-log-chevron');
+  const hidden=log.classList.toggle('hidden');
+  ch.textContent = hidden ? '▼ Expand' : '▲ Collapse';
+}
+
+// ── Invoice image / bounding-box modal ────────────────────
+const confColor = c => c >= 0.95 ? '#10B981' : c >= 0.85 ? '#F59E0B' : '#EF4444';
+const FIELD_LABELS = {
+  company:'Company', gst_id:'GST ID', invoice_no:'Invoice No', date:'Date',
+  taxable:'Taxable', tax:'Tax', total:'Total',
+};
+const DEFAULT_TAX_RULE_URL = '/tax-rules';
+const EDIT_FIELDS = ['company','gst_id','invoice_no','date','taxable','tax','total'];
+
+function resolveSourceLink(source) {
+  if (!source) return DEFAULT_TAX_RULE_URL;
+  if (/^https?:\/\//i.test(source)) return source;
+  return DEFAULT_TAX_RULE_URL;
+}
+
+function escapeHtml(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+}
+
+function buildEditFormHtml(id, ocr, prefix) {
+  const p = prefix || 'edit';
+  return `<div class="rounded-xl p-4 mt-4" style="background:#F8FAFF;border:1px solid #E2E8F0">
+    <p class="text-xs font-semibold uppercase tracking-wider mb-3" style="color:#6B7280">Edit extracted values</p>
+    <div class="edit-grid">
+      ${EDIT_FIELDS.map(f => {
+        const val = ocr?.[f];
+        const inputVal = (f==='taxable'||f==='tax'||f==='total') ? (val ?? '') : (val ?? '');
+        const step = (f==='taxable'||f==='tax'||f==='total') ? ' step="0.01"' : '';
+        const type = (f==='taxable'||f==='tax'||f==='total') ? 'number' : (f==='date' ? 'date' : 'text');
+        return `<label class="block">
+          <span class="text-xs font-semibold" style="color:#6B7280">${FIELD_LABELS[f]||f}</span>
+          <input class="edit-input mt-1" id="${p}-${f}-${id}" type="${type}" value="${escapeHtml(inputVal)}"${step}>
+        </label>`;
+      }).join('')}
+    </div>
+    <label class="flex items-center gap-2 mt-3 text-xs" style="color:#6B7280">
+      <input type="checkbox" id="${p}-refresh-boxes-${id}">
+      Refresh bounding boxes after save
+    </label>
+    <div class="flex gap-2 mt-4 flex-wrap">
+      <button class="btn btn-primary" id="${p}-submit-${id}" onclick="submitCorrection('${id}','${p}')">Save &amp; re-run compliance</button>
+      <button class="btn btn-ghost" onclick="closeRejectionModal()">Cancel</button>
+    </div>
+    <p class="text-xs mt-3 leading-relaxed" style="color:#94A3B8">Tip: changing Taxable or Tax auto-updates Total unless you edit Total yourself.</p>
+  </div>`;
+}
+
+function readCorrectionPayload(id, prefix) {
+  const p = prefix || 'edit';
+  const payload = {};
+  for (const f of EDIT_FIELDS) {
+    const el = document.getElementById(`${p}-${f}-${id}`);
+    if (!el) continue;
+    const raw = el.value.trim();
+    if (!raw) continue;
+    if (f === 'taxable' || f === 'tax' || f === 'total') {
+      const n = Number(raw);
+      if (!Number.isFinite(n)) throw new Error(`Invalid number for ${FIELD_LABELS[f]}`);
+      payload[f] = n;
+    } else {
+      payload[f] = raw;
+    }
+  }
+  const refreshEl = document.getElementById(`${p}-refresh-boxes-${id}`);
+  if (refreshEl?.checked) payload.refresh_boxes = true;
+  return payload;
+}
+
+async function submitCorrection(id, prefix) {
+  const p = prefix || 'edit';
+  const btn = document.getElementById(`${p}-submit-${id}`);
+  let payload;
+  try {
+    payload = readCorrectionPayload(id, p);
+  } catch (err) {
+    alert(err.message || String(err));
+    return;
+  }
+  if (!Object.keys(payload).length) {
+    alert('Change at least one field before saving.');
+    return;
+  }
+  if (btn) { btn.disabled = true; btn.textContent = 'Re-running…'; }
+  try {
+    const res = await fetch(`/invoices/${id}/extraction`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.error) throw new Error(data.error || 'Correction failed');
+    closeRejectionModal();
+    closeInvoiceModal();
+    _recordsSnapshot = '';
+    if (data.decision) {
+      const idx = _records.findIndex(x => x.decision.invoice_id === id);
+      if (idx >= 0) _records[idx] = data;
+      else _records.push(data);
+      renderAll(_records, true);
+    } else {
+      await fetchInvoices(true);
+    }
+    flashInvoiceRow(id);
+    const updated = _records.find(x => x.decision.invoice_id === id) ?? data;
+    const msg = describeCorrectionResult(updated);
+    const kind = updated?.status === 'REJECTED' || updated?.decision?.decision === 'FLAG'
+      ? 'error' : (updated?.status === 'PAID' || updated?.decision?.decision === 'PAY' ? 'success' : 'info');
+    showToast(msg, kind);
+  } catch (err) {
+    alert(err.message || String(err));
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Save & re-run compliance'; }
+  }
+}
+
+function imageBtn(r) {
+  return r.decision.ocr
+    ? `<button class="btn btn-ghost" style="padding:4px 12px;font-size:.75rem" onclick="openInvoiceModal('${r.decision.invoice_id}')">View Invoice</button>`
+    : '';
+}
+
+function getRejectionReasons(r) {
+  if (r.decision.reasons?.length) return r.decision.reasons;
+  if (r.compliance?.flags?.length) {
+    return r.compliance.flags.map(f => `${f.check}: ${f.message}`);
+  }
+  return [];
+}
+
+function isRejected(r) {
+  return r.status === 'REJECTED' || r.status === 'FLAG' || r.decision.decision === 'FLAG';
+}
+
+function rejectionBtn(r) {
+  if (!isRejected(r) || !getRejectionReasons(r).length) return '';
+  return `<button class="btn btn-red" style="padding:4px 12px;font-size:.75rem" onclick="openRejectionModal('${r.decision.invoice_id}')">View Reason</button>`;
+}
+
+function editBtn(r) {
+  if (!r.decision.ocr) return '';
+  return `<button class="btn btn-primary" style="padding:4px 12px;font-size:.75rem" onclick="openCorrectionModal('${r.decision.invoice_id}')">Edit &amp; Re-run</button>`;
+}
+
+function openCorrectionModal(id) {
+  const r = _records.find(x => x.decision.invoice_id === id);
+  if (!r || !r.decision.ocr) return;
+  document.getElementById('reject-modal-title').textContent =
+    `Edit & Re-run · ${r.decision.vendor}`;
+  document.getElementById('reject-modal-sub').textContent =
+    `${r.decision.invoice_id} · Correct extracted fields, then re-run compliance`;
+  const reasons = getRejectionReasons(r);
+  const flags = r.compliance?.flags ?? [];
+  let body = '';
+  if (isRejected(r) && reasons.length) {
+    body += `<div class="rounded-xl p-4 mb-4" style="background:#FEE2E2">
+      <p class="text-xs font-semibold uppercase tracking-wider mb-3" style="color:#991B1B">Current compliance flags</p>
+      <ul class="space-y-2">${reasons.map(x => `<li class="text-sm" style="color:#991B1B">• ${x}</li>`).join('')}</ul>
+    </div>`;
+  }
+  if (flags.length) {
+    body += `<div class="space-y-3 mb-4">
+      <p class="text-xs font-semibold uppercase tracking-wider" style="color:#6B7280">Compliance details</p>
+      ${flags.map(f => `<div class="rounded-lg p-3" style="background:#F8FAFF;border:1px solid #E2E8F0">
+        <p class="text-xs font-bold mb-1" style="color:#EF4444">${f.check} · ${f.reason}</p>
+        <p class="text-sm" style="color:#374151">${f.message}</p>
+        ${f.source ? `<a href="${resolveSourceLink(f.source)}" target="_blank" rel="noopener noreferrer" class="text-xs mt-2 inline-block" style="color:#4F6CF7">Tax rules source ↗</a>` : ''}
+      </div>`).join('')}
+    </div>`;
+  }
+  body += buildEditFormHtml(id, r.decision.ocr, 'reject-edit');
+  document.getElementById('reject-modal-body').innerHTML = body;
+  document.getElementById('reject-modal').classList.add('open');
+}
+
+function openRejectionModal(id) {
+  const r = _records.find(x => x.decision.invoice_id === id);
+  if (!r) return;
+  const reasons = getRejectionReasons(r);
+  document.getElementById('reject-modal-title').textContent =
+    `${r.decision.vendor} · ${fmtMyr(r.decision.amount_myr)}`;
+  document.getElementById('reject-modal-sub').textContent =
+    `${r.decision.invoice_id} · Compliance rejection details`;
+  const flags = r.compliance?.flags ?? [];
+  let body = `<div class="rounded-xl p-4 mb-4" style="background:#FEE2E2">
+    <p class="text-xs font-semibold uppercase tracking-wider mb-3" style="color:#991B1B">Why this invoice was rejected</p>
+    <ul class="space-y-3">${reasons.map(x => `<li class="text-sm leading-relaxed" style="color:#991B1B">• ${x}</li>`).join('')}</ul>
+  </div>`;
+  if (flags.length) {
+    body += `<div class="space-y-3 mb-4">
+      <p class="text-xs font-semibold uppercase tracking-wider" style="color:#6B7280">Compliance details</p>
+      ${flags.map(f => `<div class="rounded-lg p-3" style="background:#F8FAFF;border:1px solid #E2E8F0">
+        <p class="text-xs font-bold mb-1" style="color:#EF4444">${f.check} · ${f.reason}</p>
+        <p class="text-sm" style="color:#374151">${f.message}</p>
+        ${f.source ? `<a href="${resolveSourceLink(f.source)}" target="_blank" rel="noopener noreferrer" class="text-xs mt-2 inline-block" style="color:#4F6CF7">Tax rules source ↗</a>` : ''}
+      </div>`).join('')}
+    </div>`;
+  }
+  if (r.decision.ocr) {
+    body += `<p class="text-xs rounded-lg p-3" style="background:#F8FAFF;color:#6B7280;border:1px solid #E2E8F0">To correct extracted values, use <strong>Edit &amp; Re-run</strong> in the invoice table Actions column.</p>`;
+  }
+  document.getElementById('reject-modal-body').innerHTML = body;
+  document.getElementById('reject-modal').classList.add('open');
+}
+
+function rejectionBlock(r) {
+  if (!isRejected(r)) return '';
+  const reasons = getRejectionReasons(r);
+  if (!reasons.length) return '';
+  return `<div class="rounded-lg p-3 mb-3" style="background:#FEE2E2">
+    <p class="text-xs font-semibold mb-1" style="color:#991B1B">Rejection reason</p>
+    <ul class="space-y-1">${reasons.map(x => `<li class="text-sm" style="color:#991B1B">• ${x}</li>`).join('')}</ul>
+  </div>`;
+}
+
+const BOX_COLORS = {
+  company:'#4F6CF7', gst_id:'#10B981', invoice_no:'#06B6D4', date:'#8B5CF6',
+  taxable:'#F59E0B', tax:'#EF4444', total:'#0F172A',
+};
+
+function drawModalBoxes(ocr) {
+  const img = document.getElementById('modal-img');
+  const svg = document.getElementById('modal-boxes');
+  if (!img || !svg || !ocr?.boxes) return;
+  const nw = img.naturalWidth, nh = img.naturalHeight;
+  if (!nw || !nh) return;
+  svg.setAttribute('viewBox', `0 0 ${nw} ${nh}`);
+  svg.setAttribute('preserveAspectRatio', 'none');
+  let markup = '';
+  for (const [field, box] of Object.entries(ocr.boxes)) {
+    if (!Array.isArray(box) || box.length !== 4) continue;
+    const [x, y, w, h] = box;
+    const color = BOX_COLORS[field] || '#4F6CF7';
+    markup += `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${color}22" stroke="${color}" stroke-width="3" rx="2"/>`;
+    markup += `<text x="${x+4}" y="${Math.max(y-6,14)}" fill="${color}" font-size="14" font-weight="700" font-family="sans-serif">${FIELD_LABELS[field]||field}</text>`;
+  }
+  svg.innerHTML = markup;
+}
+
+function closeRejectionModal() {
+  document.getElementById('reject-modal').classList.remove('open');
+}
+
+function openInvoiceModal(id) {
+  const r = _records.find(x => x.decision.invoice_id === id);
+  if (!r || !r.decision.ocr) return;
+  const ocr = r.decision.ocr;
+
+  document.getElementById('modal-title').textContent = `${r.decision.invoice_id} · ${r.decision.vendor}`;
+  document.getElementById('modal-sub').textContent =
+    `${r.decision.decision} · ${fmtMyr(r.decision.amount_myr)} · ${Object.keys(ocr.boxes||{}).length} bounding boxes`;
+
+  const img = document.getElementById('modal-img');
+  const svg = document.getElementById('modal-boxes');
+  if (svg) svg.innerHTML = '';
+  img.onload = () => drawModalBoxes(ocr);
+  img.src = ocr.image_url;
+  if (img.complete) drawModalBoxes(ocr);
+  img.onerror = () => { img.alt = 'Image not found at ' + ocr.image_url; };
+
+  const overall = document.getElementById('modal-overall');
+  overall.textContent = Math.round(ocr.overall_confidence * 100) + '% overall';
+  overall.style.background = '#F0F4FF';
+  overall.style.color = confColor(ocr.overall_confidence);
+
+  const order = ['company','gst_id','invoice_no','date','taxable','tax','total'];
+  const fields = document.getElementById('modal-fields');
+  fields.innerHTML = order.map(f => {
+    const val = ocr[f];
+    if (val === undefined || val === null) return '';
+    const conf = (ocr.confidence && ocr.confidence[f] != null) ? ocr.confidence[f] : null;
+    const hasBox = !!(ocr.boxes && ocr.boxes[f]);
+    const display = (f==='taxable'||f==='tax'||f==='total') ? fmtMyr(val) : val;
+    return `<div class="ocr-field-row">
+      <div style="min-width:0">
+        <div class="text-xs font-semibold" style="color:#6B7280">${FIELD_LABELS[f]||f} ${hasBox?'':'<span title="No bounding box detected" style="color:#EF4444">•</span>'}</div>
+        <div class="text-sm" style="color:#0F172A;word-break:break-word">${display}</div>
+      </div>
+      ${conf!=null ? `<div class="flex items-center gap-2 flex-shrink-0">
+        <div class="conf-bar"><div style="width:${conf*100}%;background:${confColor(conf)}"></div></div>
+        <span class="text-xs font-mono" style="color:${confColor(conf)};width:34px;text-align:right">${Math.round(conf*100)}%</span>
+      </div>` : '<span class="text-xs" style="color:#94A3B8">—</span>'}
+    </div>`;
+  }).join('');
+
+  document.getElementById('img-modal').classList.add('open');
+}
+function closeInvoiceModal() {
+  document.getElementById('img-modal').classList.remove('open');
+}
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { closeInvoiceModal(); closeRejectionModal(); }
+});
+
+async function fetchHealth() {
+  const el = document.getElementById('gmail-status');
+  if (!el) return;
+  try {
+    const res = await fetch('/health');
+    if (!res.ok) throw new Error('offline');
+    const h = await res.json();
+    if (!h.backend_connected) {
+      el.textContent = 'Backend offline (' + (h.backend_url || 'localhost:8001') + ')';
+      el.style.color = '#FCA5A5';
+      return;
+    }
+    if (h.gmail_connected && h.gmail_watcher) {
+      el.textContent = '● Gmail watching (unread + attachment)';
+      el.style.color = '#6EE7B7';
+    } else if (h.gmail_watcher) {
+      el.textContent = '○ Gmail watcher on — not connected';
+      el.style.color = '#FCD34D';
+    } else {
+      el.textContent = 'Gmail watcher disabled';
+      el.style.color = '#94A3B8';
+    }
+  } catch {
+    el.textContent = 'Backend unreachable';
+    el.style.color = '#FCA5A5';
+  }
+}
+
+async function retryInvoice(id) {
+  try {
+    const res = await fetch(`/invoices/${id}/retry`,{method:'POST'});
+    if (!res.ok) { const b=await res.json().catch(()=>({error:'Error'})); alert(b.error); return; }
+    fetchInvoices(true);
+  } catch(e) { alert('Retry failed: '+e.message); }
+}
+
+// ── Poll ──────────────────────────────────────────────────
+async function fetchInvoices(force = false) {
+  const spinner = document.getElementById('poll-spinner');
+  if (spinner) spinner.style.visibility = 'visible';
+  try {
+    const res = await fetch('/invoices');
+    if (!res.ok) throw new Error('HTTP '+res.status);
+    renderAll(await res.json(), force);
+  } catch(e) {
+    const el=document.getElementById('last-updated');
+    if (el) el.textContent='⚠ '+e.message;
+  } finally {
+    if (spinner) spinner.style.visibility = 'hidden';
+  }
+}
+
+function startPolling() {
+  if (_pollTimer) clearInterval(_pollTimer);
+  _pollTimer = setInterval(() => {
+    // Don't poll in background tabs — avoids surprise redraws when user returns
+    if (document.visibilityState === 'visible') fetchInvoices();
+  }, 5000);
+}
+
+fetchInvoices(true);
+fetchHealth();
+startPolling();
+setInterval(fetchHealth, 15000);
+
+// Refresh immediately when the tab becomes visible again
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') fetchInvoices();
+});
+</script>
+</body>
+</html>

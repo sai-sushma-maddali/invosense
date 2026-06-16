@@ -1,0 +1,6 @@
+openai>=1.40.0
+pydantic>=2.6.0
+python-dotenv>=1.0.0
+Pillow>=10.0.0
+# Optional: word-box extraction. Requires the tesseract binary installed on the system.
+pytesseract>=0.3.10

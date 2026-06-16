@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: invo-frontend
+    env: node
+    region: oregon
+    plan: free
+    buildCommand: npm ci && npm run build
+    startCommand: node dist/server.js
+    envVars:
+      - key: PORT
+        value: 3000
+      - key: NODE_ENV
+        value: production
+      - key: CDP_API_KEY          # Coinbase CDP project key
+        sync: false
+      - key: CDP_WALLET_ID        # Pre-funded testnet wallet ID
+        sync: false
+      - key: WALLET_PRIVATE_KEY   # Base Sepolia testnet wallet PK — NEVER mainnet
+        sync: false
+      - key: CITED_API_URL        # cited.md publish endpoint
+        sync: false
+      - key: CITED_API_KEY        # cited.md API key
+        sync: false
+      - key: MOCK_FX_MYR_TO_USDC
+        value: "0.22"

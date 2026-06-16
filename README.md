@@ -121,7 +121,7 @@ Do these steps **in order**.
 ### 2. Backend
 
 ```cmd
-cd "GIT Code\invosense"
+cd "invosense"
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
